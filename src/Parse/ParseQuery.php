@@ -499,6 +499,40 @@ class ParseQuery
     }
 
     /**
+     * Recursively normalize the where clause, collapsing $eq_pointer sentinel
+     * values to raw pointers (for ParseObject equality) or rewriting mixed
+     * same-key cases to $eq. Handles nested condition trees (or/and/nor queries).
+     *
+     * @param mixed $value
+     * @return mixed
+     */
+    private function normalizeWhere($value)
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+
+        if (array_key_exists('$eq_pointer', $value)) {
+            $pointer = $value['$eq_pointer'];
+            unset($value['$eq_pointer']);
+
+            if (count($value) === 0) {
+                // Sole condition: collapse to raw pointer
+                return $pointer;
+            }
+
+            // Mixed same-key case: rewrite to $eq alongside other operators
+            $value['$eq'] = $pointer;
+        }
+
+        foreach ($value as $k => $v) {
+            $value[$k] = $this->normalizeWhere($v);
+        }
+
+        return $value;
+    }
+
+    /**
      * Returns an associative array of the query constraints.
      *
      * @return array
@@ -507,14 +541,7 @@ class ParseQuery
     {
         $opts = [];
         if (!empty($this->where)) {
-            $where = $this->where;
-            // Collapse $eq_pointer to raw pointer for array value queries
-            foreach ($where as $key => $conditions) {
-                if (is_array($conditions) && array_key_exists('$eq_pointer', $conditions) && count($conditions) === 1) {
-                    $where[$key] = $conditions['$eq_pointer'];
-                }
-            }
-            $opts['where'] = $where;
+            $opts['where'] = $this->normalizeWhere($this->where);
         }
         if (count($this->includes)) {
             $opts['include'] = implode(',', $this->includes);
@@ -646,13 +673,7 @@ class ParseQuery
         }
          $opts = [];
         if (!empty($this->where)) {
-            $where = $this->where;
-            foreach ($where as $k => $conditions) {
-                if (is_array($conditions) && array_key_exists('$eq_pointer', $conditions) && count($conditions) === 1) {
-                    $where[$k] = $conditions['$eq_pointer'];
-                }
-            }
-            $opts['where'] = $where;
+            $opts['where'] = $this->normalizeWhere($this->where);
         }
         $opts['distinct'] = $key;
         $queryString = $this->buildQueryString($opts);

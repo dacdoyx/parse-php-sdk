@@ -1,7 +1,7 @@
 <?php
 spl_autoload_register(function ($class) {
     $prefix = 'Parse\\';
-    $base = '/root/parse-php-sdk/src/Parse/';
+    $base = __DIR__ . '/src/Parse/';
     if (strpos($class, $prefix) !== 0) return;
     $relative = substr($class, strlen($prefix));
     $file = $base . str_replace('\\', '/', $relative) . '.php';
@@ -68,16 +68,17 @@ $encoded4 = json_encode($opts4['where'] ?? []);
 echo "  where = $encoded4\n";
 check('foo should have both $eq and $gt', strpos($encoded4, '$eq') !== false && strpos($encoded4, '$gt') !== false);
 
-// Test 5: ParseObject + another constraint on same key (order-dependent case)
-echo "\nTest 5: ParseObject with other constraints\n";
+// Test 5: ParseObject + another constraint on SAME key (mixed case)
+echo "\nTest 5: ParseObject with other constraints on same key\n";
 $query5 = new ParseQuery('TestClass');
-$query5->greaterThan('count', 5);
 $query5->equalTo('users', $user);
+$query5->exists('users');
 $opts5 = $query5->_getOptions();
 $encoded5 = json_encode($opts5['where'] ?? []);
 echo "  where = $encoded5\n";
-check('count should have $gt', strpos($encoded5, '$gt') !== false);
-check('users should be direct pointer', strpos($encoded5, '"__type":"Pointer"') !== false);
+check('should NOT have $eq_pointer in output', strpos($encoded5, '$eq_pointer') === false);
+check('users should still contain the pointer payload', strpos($encoded5, '"__type":"Pointer"') !== false);
+check('users should still contain the sibling operator', strpos($encoded5, '$exists') !== false);
 
 echo "\n=== Results: $passed passed, $failed failed ===\n";
 exit($failed > 0 ? 1 : 0);
