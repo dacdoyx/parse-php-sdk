@@ -140,7 +140,13 @@ class ParseQuery
      */
     public function equalTo($key, $value)
     {
-        $this->addCondition($key, '$eq', $value);
+        if ($value instanceof ParseObject) {
+            // Pointer values (e.g. users => ParseUser) should match directly,
+            // not wrapped in $eq, to support queries on array values.
+            $this->where[$key] = ParseClient::_encode($value, true);
+        } else {
+            $this->addCondition($key, '$eq', $value);
+        }
 
         return $this;
     }
