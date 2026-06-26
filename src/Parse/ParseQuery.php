@@ -141,9 +141,9 @@ class ParseQuery
     public function equalTo($key, $value)
     {
         if ($value instanceof ParseObject) {
-            // Pointer values (e.g. users => ParseUser) should match directly,
-            // not wrapped in $eq, to support queries on array values.
-            $this->where[$key] = ParseClient::_encode($value, true);
+            // Mark pointer values with a special marker so we can collapse
+            // them to raw pointers at query build time (supports array queries)
+            $this->addCondition($key, '$eq_pointer', $value);
         } else {
             $this->addCondition($key, '$eq', $value);
         }
@@ -507,7 +507,14 @@ class ParseQuery
     {
         $opts = [];
         if (!empty($this->where)) {
-            $opts['where'] = $this->where;
+            $where = $this->where;
+            // Collapse $eq_pointer to raw pointer for array value queries
+            foreach ($where as $key => $conditions) {
+                if (is_array($conditions) && array_key_exists('$eq_pointer', $conditions) && count($conditions) === 1) {
+                    $where[$key] = $conditions['$eq_pointer'];
+                }
+            }
+            $opts['where'] = $where;
         }
         if (count($this->includes)) {
             $opts['include'] = implode(',', $this->includes);
@@ -639,7 +646,13 @@ class ParseQuery
         }
          $opts = [];
         if (!empty($this->where)) {
-            $opts['where'] = $this->where;
+            $where = $this->where;
+            foreach ($where as $k => $conditions) {
+                if (is_array($conditions) && array_key_exists('$eq_pointer', $conditions) && count($conditions) === 1) {
+                    $where[$k] = $conditions['$eq_pointer'];
+                }
+            }
+            $opts['where'] = $where;
         }
         $opts['distinct'] = $key;
         $queryString = $this->buildQueryString($opts);
